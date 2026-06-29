@@ -1,26 +1,17 @@
-FROM node:20-alpine
+FROM node:20
+
+ENV NODE_OPTIONS=--dns-result-order=ipv4first
 
 WORKDIR /app
 
-# Copy package files
 COPY package*.json ./
-COPY pnpm-lock.yaml ./
+RUN npm install
 
-# Install pnpm and dependencies
-RUN npm install -g pnpm && pnpm install --frozen-lockfile
-
-# Copy prisma schema and generate client
-COPY prisma ./prisma
-RUN pnpm prisma generate
-
-# Copy source code
 COPY . .
 
-# Build TypeScript
-RUN pnpm build
+RUN npx prisma generate
+RUN npm run build
 
-# Expose port
 EXPOSE 5000
 
-# Start production server
-CMD ["node", "dist/server.js"]
+CMD ["npm","start"]
