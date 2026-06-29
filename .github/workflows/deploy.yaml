@@ -1,0 +1,60 @@
+####
+name: HRMS Backend Deployment
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - README.md
+  pull_request:
+    branches:
+      - main
+    paths-ignore:
+      - README.md
+env:
+  AWS_REGION : "ap-south-1"
+  AWS_ACCOUNT_ID: "683213329249"
+  REPO_NAME : "hrms-backend"
+  ECS_UPDATE: "hrms-backend"
+
+permissions:
+  id-token: write   
+  contents: read    
+
+jobs:
+  ECS_Deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Git clone the repository
+        uses: actions/checkout@v4
+        
+      - name: configure aws credentials
+        uses: aws-actions/configure-aws-credentials@v3
+        with:
+          role-to-assume: arn:aws:iam::${{ env.AWS_ACCOUNT_ID }}:role/Role_for_GithubActions
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, tag, and push the image to Amazon ECR
+        id: build-image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: ${{ env.REPO_NAME }}
+          IMAGE_TAG: v${{ github.run_number }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:latest" >> $GITHUB_OUTPUT
+    
+      - name: Update ECS
+        run: |
+          aws ecs update-service \
+                --cluster ${{ env.ECS_UPDATE }} \
+                --service ${{ env.ECS_UPDATE }} \
+                --force-new-deployment
